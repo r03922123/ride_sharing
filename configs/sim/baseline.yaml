@@ -1,0 +1,18 @@
+# Baseline simulation scenario. Consumed by `ridepulse sim run` (Stage 3).
+
+city:
+  n_drivers: 2500
+  seed: 20260828
+  demand_profile_path: configs/sim/demand_profile.parquet
+  driver_placement: demand_weighted   # or: uniform
+
+run:
+  start: "2023-01-04 00:00"   # a Wednesday inside the calibrated range
+  hours: 24
+  rider_patience_min: 8.0     # cancels if unmatched this long
+  trip_speed_kmh: 24.0        # straight-line speed for travel-time estimates
+
+dispatch:
+  policy: nearest_driver      # key in ridepulse.sim.des.dispatch.POLICIES
+  params:
+    radius_km: 3.0

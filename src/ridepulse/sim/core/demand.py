@@ -95,6 +95,12 @@ class DemandProfile:
 
     # ---- query ----------------------------------------------------------
 
+    def total_weekly_pickups(self, zone_id: int) -> float:
+        """Sum of mean hourly pickups over all 168 hour-of-week slots."""
+        return float(
+            sum(self._lookup.get((zone_id, how), 0.0) for how in range(HOURS_PER_WEEK))
+        )
+
     def arrival_rate(self, zone_id: int, when: datetime | pd.Timestamp) -> float:
         """Riders per minute for ``zone_id`` in the hour-of-week of ``when``."""
         ts = pd.Timestamp(when)
