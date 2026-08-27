@@ -50,6 +50,31 @@ for AI-first firms, bonus for the rest. The RL phase (Phase 6) is similarly
 upside-only and lands hardest with autonomous-driving / mobility-adjacent AI
 firms (e.g. Turing).
 
+### Reference scenario (the narrative spine)
+
+Every phase's demo, every blog post, and the README all trace the same story so
+the project reads as one system rather than seven mini-projects:
+
+> On a rainy Wednesday evening, ride cancellations spiked in Midtown Manhattan
+> (TLC zones 161 / 162 / 163 / 230) between 18:00 and 21:00. An operations analyst
+> asks the assistant *why*. The agent pulls actuals, compares them to what the
+> demand model expected (realised demand was ~40% above forecast — rain-driven,
+> and the model underweights precipitation), checks that idle-driver supply in
+> adjacent zones did not shift to compensate, and concludes it was a
+> supply-positioning failure triggered by a forecast miss. The analyst then asks
+> a what-if: would repositioning idle drivers toward Midtown at 17:30 have
+> helped? The agent runs it in `sim.des` (median wait 11 → 7 min, cancellations
+> −35%, driver idle +6%). Before that goes in a report, Phase 4a re-runs it as a
+> pre-registered experiment (200 simulated days, CUPED) → −3.8 min wait
+> [95% CI −4.5, −3.1]; Phase 6 estimates the same policy's value by off-policy
+> evaluation from baseline logs and matches the true simulator return within 8%.
+> The finding "forecast underweights rain" feeds back: add a `precip × hour`
+> feature, re-run the leakage-asserted backtest, confirm on fresh data via the
+> drift monitor, promote the new model version in the registry, serving picks it
+> up.
+
+Each phase's **Done** criteria reference the slice of this scenario it enables.
+
 ---
 
 ## 2. Constraints & non-goals
