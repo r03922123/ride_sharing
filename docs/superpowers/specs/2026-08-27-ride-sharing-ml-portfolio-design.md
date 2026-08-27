@@ -586,6 +586,39 @@ AI-first-firm pitch. Phases 1 + 4a + 2 are the consumer-platform pitch. Phase 6
 
 ---
 
+## 17. Remote development (laptop-optional workflow)
+
+The primary machine is an 8 GB M1 Air, but development should not require it to
+stay open or online. Pattern: **remote box + `tmux` + thin client**. The agent
+and any training run execute on a remote host inside a `tmux` session; the
+laptop (or a phone SSH app) holds only a lightweight connection and can
+disconnect entirely without stopping work.
+
+### Environments
+
+| Use | Host | Notes |
+| --- | --- | --- |
+| Interactive agent dev loop | **GitHub Codespaces** | Provisioned by `.devcontainer/` (Python 3.11, `uv`, Docker-in-Docker, Node, Claude Code). Free tier ≈ 60 h/mo at 2-core/8 GB — matched to the M1 envelope on purpose. Stop when idle; state persists ~30 days. Reconnect from browser or `gh codespace ssh` |
+| Long unattended runs (big backtest sweeps, Phase 6 DQN training) | **Oracle Cloud Always Free (Ampere A1)** | 4 Arm cores + 24 GB RAM, always on. Whole stack has Arm wheels. `tmux` job runs for hours/days after full disconnect |
+| Quick phone-side check-in | Google Cloud Shell | Zero setup; 20 min idle disconnect makes it unsuitable for unattended compute |
+
+### Auth & cost
+
+- Claude Code on a headless box: run `claude`, approve the printed device code
+  from a phone browser. Uses the existing subscription — no per-token charge.
+- Alternative: `ANTHROPIC_API_KEY` with a spending cap set, so a runaway agent
+  loop cannot surprise-bill.
+- Agent LLM calls (Groq free tier) only need outbound HTTPS — location-independent.
+
+### Sync
+
+- The GitHub repo (`git@github.com:r03922123/ride_sharing.git`) is the only sync
+  channel between the M1 and any remote. Commit and push before switching hosts.
+- No GPU anywhere (the spec forbids it), so every environment above is
+  compute-adequate for Phases 0–1 and the tabular core of Phase 6.
+
+---
+
 ## Appendix A — Worked numeric examples
 
 Small, hand-checkable examples for every method in the spec. All numbers are
