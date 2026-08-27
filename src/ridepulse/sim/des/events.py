@@ -12,7 +12,8 @@ from pathlib import Path
 import pandas as pd
 
 _COLUMNS = [
-    "kind", "ts", "rider_id", "driver_id", "zone_id", "to_zone_id", "wait_min",
+    "seq", "kind", "ts", "rider_id", "driver_id", "zone_id", "to_zone_id",
+    "wait_min",
 ]
 
 
@@ -70,7 +71,9 @@ class EventLog:
         self._rows: list[dict[str, object]] = []
 
     def append(self, event: Event) -> None:
-        self._rows.append({"kind": event.kind, **asdict(event)})
+        self._rows.append(
+            {"seq": len(self._rows), "kind": event.kind, **asdict(event)}
+        )
 
     def __len__(self) -> int:
         return len(self._rows)
@@ -80,7 +83,9 @@ class EventLog:
         for col in _COLUMNS:
             if col not in df.columns:
                 df[col] = pd.NA
-        df = df[_COLUMNS].sort_values("ts").reset_index(drop=True)
+        # (ts, seq) is a total causal order: seq is the emission index.
+        df = df[_COLUMNS].sort_values(["ts", "seq"]).reset_index(drop=True)
+        df["seq"] = df["seq"].astype("int64")
         df["kind"] = df["kind"].astype("string")
         df["ts"] = pd.to_datetime(df["ts"])
         for col in ("rider_id", "driver_id", "zone_id", "to_zone_id"):

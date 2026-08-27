@@ -36,8 +36,8 @@ def test_to_frame_is_sorted_and_has_all_columns() -> None:
     df = _log().to_frame()
     assert len(df) == 6
     assert df["ts"].is_monotonic_increasing
-    assert {"kind", "ts", "rider_id", "driver_id", "zone_id", "to_zone_id",
-            "wait_min"} == set(df.columns)
+    assert {"seq", "kind", "ts", "rider_id", "driver_id", "zone_id",
+            "to_zone_id", "wait_min"} == set(df.columns)
     assert df.iloc[0]["kind"] == "RiderRequested"
 
 
