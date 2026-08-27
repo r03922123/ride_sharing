@@ -3,6 +3,8 @@
 **Date:** 2026-08-27
 **Status:** Approved for implementation planning
 **Author:** csam020410@gmail.com
+**Revised 2026-08-27:** added Phase 6 (reinforcement learning for driver
+repositioning) and the dual-simulator design (discrete-event + time-stepped MDP).
 
 ---
 
@@ -10,9 +12,10 @@
 
 `ride-pulse` is a phased portfolio project: an ML system for ride-sharing demand
 intelligence built on public NYC TLC trip data. It serves forecasting / ETA
-models behind APIs, exposes them to an LLM ops-assistant agent, and includes two
-rigorous evaluation studies (a simulated online experiment and an agent
-benchmark).
+models behind APIs, exposes them to an LLM ops-assistant agent, and includes
+three rigorous evaluation studies — a simulated online experiment, an agent
+benchmark, and (Phase 6) off-policy evaluation of a reinforcement-learning
+repositioning policy.
 
 ### Why this project exists
 
@@ -30,6 +33,7 @@ market requirements:
 | Time-series / demand forecasting | Phase 1: demand model with rolling-origin backtesting, prediction intervals, leakage assertions |
 | LLM / agent development | Phase 3: LiteLLM-routed ReAct agent with tool orchestration and trace logging |
 | Low-level / OOP design | Cross-cutting: explicit class design, ADRs, class diagrams, design patterns per seam (see §8) |
+| Reinforcement learning *(learning goal, not a prior interview gap)* | Phase 6: driver-repositioning RL on a time-stepped MDP simulator, with off-policy evaluation as the headline deliverable. Unifies the evaluation theme — OPE is the conceptual bridge between the A/B test (7a) and the agent benchmark (7b) |
 
 ### Target employers (all foreigner-application-friendly, Tokyo)
 
@@ -42,7 +46,9 @@ The same repository pitches three ways:
 | Fintech / payments (PayPay, Rakuten Pay) | Low-latency serving, imbalanced classification, monitoring, scale | 1, 2 (with optional risk classifier) | "Sub-100ms served models with drift monitoring and load-tested throughput" |
 
 The agent (Phase 3) is the only target-specific bet and is upside-only: headline
-for AI-first firms, bonus for the rest.
+for AI-first firms, bonus for the rest. The RL phase (Phase 6) is similarly
+upside-only and lands hardest with autonomous-driving / mobility-adjacent AI
+firms (e.g. Turing).
 
 ---
 
@@ -50,8 +56,11 @@ for AI-first firms, bonus for the rest.
 
 ### Hard constraints
 
-- **Compute:** MacBook Air M1, 8 GB unified memory, no CUDA. Every model must
-  train on the M1 in minutes. No GPU deep learning.
+- **Compute:** MacBook Air M1, 8 GB unified memory, no CUDA. Classical models
+  (LightGBM, statsforecast, tabular/linear RL) must train on the M1 in minutes.
+  The Phase 6 RL stretch (small-MLP DQN/PPO) is allowed up to a few hours per
+  training run against the fast time-stepped simulator. No GPU deep learning; no
+  RL from raw/high-dimensional observations.
 - **Budget:** zero. No paid LLM APIs. LLM inference via free hosted OSS models
   with a local fallback.
 - **Licensing:** every dependency open-source.
@@ -61,9 +70,13 @@ for AI-first firms, bonus for the rest.
 - GPU deep learning / neural forecasting models.
 - Real-time streaming infrastructure (Kafka, Flink, Spark).
 - Kubernetes; any cloud-native orchestration.
-- Autonomous dispatching. Dispatch policies are heuristic only.
-- Reinforcement learning. (Off-policy evaluation may be added later if ever
-  warranted; not in this spec.)
+- Autonomous **dispatch matching**. The rider↔driver matching policy stays
+  heuristic (nearest-driver, radius-then-queue, batched assignment). RL is
+  applied only to the separate *driver-repositioning* problem in Phase 6.
+- Deep / large-scale RL: multi-agent RL, RL from raw observations, distributed
+  rollouts. Phase 6 is deliberately small (tabular / linear core, small-MLP
+  stretch) with the evaluation methodology as the deliverable, not a
+  state-of-the-art result.
 - Multi-city generalization. NYC only.
 - A production frontend. One minimal Gradio panel for the agent demo only.
 - Workflow orchestrators (Prefect / Dagster). A `Makefile` is honest at this
@@ -92,18 +105,35 @@ All services containerized; one `docker compose up` brings the system up.
                        │  /forecast /eta  │
                        │  /risk (opt)     │
                        └──────────────────┘
-                          ▲            ▲
-              ┌───────────┘            └────────────┐
-   ┌──────────────────┐              ┌──────────────────────┐
-   │  city simulator  │              │  ops-assistant agent │
-   │  (discrete-event)│◀────tools────│  (LiteLLM-routed)    │
-   └──────────────────┘              └──────────────────────┘
-                                              ▲
-                                     ┌────────────────────┐
-                                     │  eval harness      │
-                                     │  4a: A/B sim study │
-                                     │  4b: agent bench   │
-                                     └────────────────────┘
+                          ▲                     ▲
+                          │                     │
+                          │        ┌────────────────────────┐
+                          │        │   ops-assistant agent  │
+                          │        │   (LiteLLM-routed)      │
+                          │        └───────────┬────────────┘
+                          │        tools       │
+                          │      (serving +    ▼
+                          │       sim.des)  ┌────────────────────┐
+                          │                 │   eval harness     │
+                          │                 │   4a  A/B study    │
+                          │                 │   4b  agent bench  │
+                          │                 │   OPE (Phase 6)    │
+                          │                 └────────────────────┘
+   ┌──────────────────────────────────────┐
+   │ sim.core   shared city model:        │
+   │            grid, zones, demand prof.  │
+   ├──────────────────┬───────────────────┤
+   │ sim.des          │ sim.mdp           │
+   │ (SimPy,          │ (NumPy,           │
+   │  event-driven)   │  time-stepped)    │
+   └────────┬─────────┴─────────┬─────────┘
+            │                   │
+            ▼                   ▼
+   ┌────────────────┐   ┌────────────────────────┐
+   │ 4a  A/B study  │   │ rl                     │
+   │ (uses sim.des) │   │  Gym env, repositioning│◀── consumes /forecast
+   └────────────────┘   │  policies, OPE         │
+                        └────────────────────────┘
         ┌──────────────────┐
         │  monitoring      │  Evidently reports on a schedule
         │  (drift, perf)   │
@@ -111,9 +141,12 @@ All services containerized; one `docker compose up` brings the system up.
 ```
 
 **Data flow:** raw TLC → cleaned parquet → feature builder → train → registry →
-serving. Agent calls serving + simulator over HTTP. Eval harness drives agent +
-simulator and writes reports to `reports/`. Monitoring reads serving request
-logs plus a reference dataset.
+serving. Both simulators are built on a shared `sim.core` city model. The agent
+calls serving + `sim.des` over HTTP. The `rl` package wraps `sim.mdp` in a
+Gymnasium environment and consumes demand forecasts as state features. The eval
+harness drives the agent, the A/B study (on `sim.des`), and off-policy evaluation
+of RL policies (on `sim.mdp`), writing reports to `reports/`. Monitoring reads
+serving request logs plus a reference dataset.
 
 ---
 
@@ -126,13 +159,16 @@ it do, how do you use it, what does it depend on.**
 | Package | Responsibility | Primary interface | Key dependencies |
 | --- | --- | --- | --- |
 | `data` | Download, validate, clean TLC data; build zone×time feature tables | CLI: `ridepulse data build --months 2023-01..2023-06` → parquet | TLC parquet, DuckDB, pandera |
-| `sim` | Discrete-event city-grid simulation: riders spawn from a demand profile, drivers move on a grid, dispatch policy is pluggable | `Simulation(config).run() -> EventLog`; `DispatchPolicy` ABC | SimPy, numpy |
+| `sim.core` | Shared city model: grid, NYC zone mapping, demand profiles calibrated to TLC data, driver/rider entities | `CityModel`, `DemandProfile`, entity dataclasses | numpy |
+| `sim.des` | Discrete-event simulation on `sim.core`: riders spawn from the demand profile, drivers move, dispatch matching policy is pluggable. Used by the agent and the Phase 4a A/B study | `Simulation(config).run() -> EventLog`; `DispatchPolicy` ABC | SimPy, `sim.core` |
+| `sim.mdp` | Time-stepped vectorized simulation on `sim.core`: fixed-interval steps, low-dimensional state, fast enough for 10⁵–10⁷ steps. Used only by `rl` | `step(state, action) -> (state, reward, done)` | numpy, `sim.core` |
+| `rl` | Driver-repositioning RL: Gymnasium environment wrapping `sim.mdp`; repositioning `Policy` ABC (heuristic baselines + learned); tabular/linear Q-learning core, small-MLP DQN stretch; hand-implemented off-policy evaluation (IPS, SNIPS, doubly-robust) | `RepositionEnv` (Gym API), `train_agent(cfg)`, `ope_report(logged, target)` | gymnasium, cleanrl or stable-baselines3, torch, `sim.mdp`, `forecast` |
 | `forecast` | Demand model (pickups per zone per hour): LightGBM + statsforecast baselines; rolling-origin backtest; prediction intervals | `train(cfg)`, `predict(zone, ts, horizon) -> DemandForecast` | lightgbm, statsforecast, mlflow |
 | `eta` | Trip-duration regressor (LightGBM) | `train(cfg)`, `predict(features) -> EtaPrediction` | lightgbm, mlflow |
 | `risk` *(optional)* | Cancellation / payment-risk binary classifier; calibration; threshold selection under class imbalance | `train(cfg)`, `predict_proba(features)`, `calibration_report()` | lightgbm, scikit-learn |
 | `serving` | FastAPI app: `/forecast`, `/eta`, `/risk`, `/healthz`; loads models from registry; structured request logging; p99 latency budget 100 ms | OpenAPI schema | fastapi, uvicorn, mlflow |
 | `agent` | Ops-assistant: LiteLLM client, tool definitions wrapping serving + sim, ReAct loop with optional reflection, full trace logging, response cache, request cap | `Agent.run(query: str) -> AgentResult` | litellm, ollama, the serving API |
-| `eval` | 4a: experiment runner (assignment, metrics, CUPED, hypothesis tests). 4b: agent task suite, graders, ablation runner, leaderboard | CLI: `ridepulse eval ab`, `ridepulse eval agent` | scipy, statsmodels, the agent + sim |
+| `eval` | 4a: experiment runner (assignment, metrics, CUPED, hypothesis tests). 4b: agent task suite, graders, ablation runner, leaderboard. Also the shared statistics toolkit (bootstrap CIs, hypothesis tests) reused by `rl`'s OPE | CLI: `ridepulse eval ab`, `ridepulse eval agent` | scipy, statsmodels, the agent + `sim.des` |
 | `monitoring` | Scheduled Evidently drift / performance reports: live window vs. reference | CLI + HTML report | evidently |
 
 ---
@@ -183,8 +219,8 @@ it do, how do you use it, what does it depend on.**
 
 ### 7a — Simulated online experiment (consumer-platform emphasis)
 
-One intervention, implemented as a `DispatchPolicy` (or a pricing rule) in the
-simulator: e.g. a surge-pricing rule change **or** a dispatch-radius change.
+One intervention, implemented as a `DispatchPolicy` (or a pricing rule) in
+`sim.des`: e.g. a surge-pricing rule change **or** a dispatch-radius change.
 
 Deliverables:
 
@@ -214,6 +250,25 @@ Deliverables:
   Uses the same statistical vocabulary as 7a.
 - **Output:** `reports/agent-bench/leaderboard.md` + a blog post.
 
+### 7c — Off-policy / offline evaluation (RL, Phase 6)
+
+The headline deliverable of Phase 6 is the *evaluation methodology*, not beating
+the heuristic. It is the conceptual bridge between 7a and 7b: all three estimate
+the value of a policy from limited data.
+
+- **Estimators, hand-implemented:** inverse propensity scoring (IPS),
+  self-normalized IPS (SNIPS), and a doubly-robust estimator, each tested against
+  a known-answer toy MDP.
+- **Protocol:** collect logged trajectories from a stochastic behavior policy on
+  `sim.mdp`; estimate the learned policy's return via OPE; compare to the true
+  return obtained by actually running the learned policy in the simulator (the
+  simulator makes ground truth available — that is the point of using one).
+- **Reporting:** OPE estimates with bootstrap confidence intervals; bias vs. the
+  true return; sensitivity to behavior-policy stochasticity and trajectory count.
+- **Limitations section (required):** an explicit, frank account of why the
+  simulator constrains what can be concluded, and what would be needed to trust
+  the result on real operations.
+
 ---
 
 ## 8. Low-level / OOP design (explicit deliverable)
@@ -225,8 +280,9 @@ interview question.
 ### Required design artifacts
 
 - **ADR per non-trivial package** in `docs/adr/` (`sim`, `agent`, `forecast`,
-  `serving`, `eval`): the design decision, alternatives considered, chosen class
-  model, and why.
+  `serving`, `eval`, `rl`): the design decision, alternatives considered, chosen
+  class model, and why. The `sim` ADR must justify the `core` / `des` / `mdp`
+  split (why two simulators, what each optimizes for, how they stay consistent).
 - **Mermaid class diagrams** in `docs/lld/` for `sim` and `agent` (entities,
   interfaces, relationships, key methods).
 - **Interview-prep doc** `docs/lld/design-a-ride-sharing-backend.md`: a written
@@ -237,17 +293,21 @@ interview question.
 
 | Seam | Pattern | Rationale |
 | --- | --- | --- |
-| Dispatch policies (`sim`) | Strategy + ABC | Swap matching logic without touching the sim loop |
+| Dispatch matching policies (`sim.des`) | Strategy + ABC | Swap matching logic without touching the sim loop |
+| Repositioning policies (`rl`) | Strategy + ABC | Heuristic baselines and learned policies share one `Policy` interface |
+| RL environment (`rl`) | Adapter | `RepositionEnv` adapts `sim.mdp` to the Gymnasium API |
 | Prompt strategies (`agent`) | Strategy | Zero-shot / ReAct / reflection are interchangeable |
 | LLM provider access | Adapter (via LiteLLM) | Uniform interface over Groq / Ollama / others |
 | Agent tools | Command + registry | Each tool is a self-describing invocable unit |
 | Model interface (`forecast`/`eta`/`risk`) | Protocol / Template Method | Common `train` / `predict` contract; shared backtest scaffold |
-| Sim event stream | Observer | Event log, metrics collectors, monitoring subscribe independently |
+| Two simulators on one domain (`sim.core`) | Layered core + Template Method | `des` and `mdp` reuse the same city model and demand profiles; divergence is a test failure |
+| Sim event stream (`sim.des`) | Observer | Event log, metrics collectors, monitoring subscribe independently |
 | Data / registry access | Repository | Isolate parquet + MLflow behind a narrow interface |
+| OPE estimators (`rl`) | Strategy | IPS / SNIPS / doubly-robust behind one estimator interface |
 
 ### Design review gate
 
-Each package PR includes its ADR and (for `sim` / `agent`) its class diagram.
+Each package PR includes its ADR and (for `sim` / `agent` / `rl`) its class diagram.
 The self-review checks: can a consumer understand the package without reading its
 internals? Can the internals change without breaking consumers? If not, the
 boundaries are reworked before merge.
@@ -261,7 +321,10 @@ boundaries are reworked before merge.
 - **Modeling:** LightGBM, statsforecast, scikit-learn, scipy, statsmodels.
 - **Experiment tracking:** MLflow (local file backend; no tracking server).
 - **Serving:** FastAPI + uvicorn.
-- **Simulation:** SimPy.
+- **Simulation:** SimPy (`sim.des`); NumPy (`sim.mdp`).
+- **RL (Phase 6):** Gymnasium; CleanRL (single-file reference implementations,
+  chosen for readability + learning) or Stable-Baselines3; PyTorch (CPU / MPS,
+  small MLPs only).
 - **Agent:** LiteLLM, Ollama (local), Groq free tier (hosted).
 - **Monitoring:** Evidently.
 - **Orchestration:** `Makefile` + `docker compose`.
@@ -293,8 +356,16 @@ boundaries are reworked before merge.
 ## 11. Testing strategy
 
 - **Unit:** every package. Feature builders tested against hand-computed
-  fixtures. Simulator tested for conservation invariants (no rider or driver
-  vanishes). Graders tested on golden transcripts.
+  fixtures. Both simulators tested for conservation invariants (no rider or
+  driver vanishes). Graders tested on golden transcripts.
+- **Simulator consistency test:** on an identical scenario and seed, `sim.des`
+  and `sim.mdp` must agree on aggregate demand served and mean wait time within a
+  documented tolerance — guards against the two implementations drifting apart.
+- **RL environment tests:** Gymnasium API compliance (`check_env`); deterministic
+  rollout under a fixed seed; reward and termination logic against hand-computed
+  cases.
+- **OPE estimator tests:** IPS / SNIPS / doubly-robust each recover the known
+  true return on a small toy MDP within Monte Carlo error.
 - **Backtest integrity test:** automated assertion that no future data leaks into
   any training fold (`max(train_ts) < min(test_ts)` per fold).
 - **Contract tests:** serving OpenAPI schema snapshot; agent tool schemas
@@ -315,7 +386,9 @@ ride-pulse/
 ├── pyproject.toml           # uv
 ├── manifests/tlc_2023.yaml  # source URLs + SHA-256 checksums
 ├── src/ridepulse/
-│   ├── data/  sim/  forecast/  eta/  risk/
+│   ├── data/  forecast/  eta/  risk/
+│   ├── sim/                 # core/ (shared model), des/ (SimPy), mdp/ (NumPy)
+│   ├── rl/                  # Gym env, repositioning policies, OPE
 │   ├── serving/  agent/  eval/  monitoring/
 ├── configs/                 # yaml per model, per sim scenario, per experiment
 ├── notebooks/               # EDA + narrative, nbstripout'd
@@ -351,16 +424,21 @@ on), an ADR (where §8 requires one), and a README section. Portfolio talking
 points are written into `docs/skills-map.md` as work proceeds.
 
 Phase 1 alone is a legitimate MLE portfolio piece. Phases 1 + 3 + 4b are the
-AI-first-firm pitch. Phases 1 + 4a + 2 are the consumer-platform pitch.
+AI-first-firm pitch. Phases 1 + 4a + 2 are the consumer-platform pitch. Phase 6
+(RL) is an independent later extension, upside-only.
 
 ### Phase 0 — Data & simulation foundation
 
 - TLC ingestion, checksum manifest, pandera schemas, cleaning to parquet.
 - Feature builders for demand and ETA.
-- Discrete-event city-grid simulator with a pluggable `DispatchPolicy` ABC and a
-  heuristic baseline policy; demand profile calibrated to real TLC patterns.
-- ADR + class diagram for `sim`.
-- **Done:** `make data` reproduces all feature tables from the manifest; `sim`
+- `sim.core`: shared city model (grid, NYC zone mapping, demand profiles
+  calibrated to real TLC patterns, driver/rider entities).
+- `sim.des`: discrete-event simulator on `sim.core` with a pluggable
+  `DispatchPolicy` ABC and a heuristic baseline policy.
+- `sim.mdp` interface stub only (the fast time-stepped sim is built in Phase 6);
+  Phase 0 fixes the `sim.core` boundary so Phase 6 does not force a redesign.
+- ADR + class diagram for `sim` (must justify the `core` / `des` / `mdp` split).
+- **Done:** `make data` reproduces all feature tables from the manifest; `sim.des`
   runs a scenario and emits an event log; unit tests + conservation invariants
   green in CI.
 
@@ -388,7 +466,7 @@ AI-first-firm pitch. Phases 1 + 4a + 2 are the consumer-platform pitch.
 
 ### Phase 3 — Ops-assistant agent
 
-- LiteLLM-routed agent; tools wrap the Phase 1–2 APIs and the simulator.
+- LiteLLM-routed agent; tools wrap the Phase 1–2 APIs and `sim.des`.
 - ReAct loop with optional reflection; response cache; request cap; trace
   logging.
 - Local Ollama fallback verified.
@@ -399,8 +477,9 @@ AI-first-firm pitch. Phases 1 + 4a + 2 are the consumer-platform pitch.
 
 ### Phase 4a — Simulated online experiment
 
-- Pre-registration doc; intervention implemented as a policy/pricing change.
-- A/B run in the simulator; analysis with CIs + CUPED; peeking-pitfall
+- Pre-registration doc; intervention implemented as a `DispatchPolicy` / pricing
+  change on `sim.des`.
+- A/B run in `sim.des`; analysis with CIs + CUPED; peeking-pitfall
   demonstration.
 - **Done:** `reports/ab-study/` contains pre-registration, analysis notebook, and
   a written conclusion.
@@ -421,6 +500,25 @@ AI-first-firm pitch. Phases 1 + 4a + 2 are the consumer-platform pitch.
 - **Done:** a stranger can clone, run `docker compose up`, and reach the demo in
   under 15 minutes following the README.
 
+### Phase 6 — Reinforcement learning for driver repositioning *(independent extension)*
+
+- `sim.mdp`: fast time-stepped NumPy simulator on the Phase 0 `sim.core` model;
+  the `sim.des` ↔ `sim.mdp` consistency test passes.
+- `rl.RepositionEnv`: Gymnasium environment; state includes the current supply
+  distribution, time-of-day, and the Phase 1 demand forecast; action is a
+  repositioning assignment for idle drivers.
+- Heuristic baseline policies (`stay-put`, `chase-forecast`).
+- Learned policies: tabular / linear Q-learning (core); small-MLP DQN via CleanRL
+  (stretch).
+- Off-policy evaluation toolkit (§7c): IPS / SNIPS / doubly-robust, tested
+  against a toy MDP, applied to compare policies without "deploying" them, then
+  validated against true simulator returns.
+- ADR + class diagram for `rl`.
+- One blog post (RL + off-policy evaluation + honest limitations).
+- **Done:** `reports/rl/` contains the training curves, the policy comparison
+  table with bootstrap CIs, the OPE-vs-true-return bias analysis, and the
+  limitations write-up; results reproducible across two runs.
+
 ---
 
 ## 15. Risks & mitigations
@@ -433,7 +531,11 @@ AI-first-firm pitch. Phases 1 + 4a + 2 are the consumer-platform pitch.
 | Simulator too toy to be credible | Calibrate demand to real TLC profiles; document assumptions and limitations explicitly |
 | Scope creep across phases | Hard "done" definition per phase; each ships independently; Phase 1 alone is valid |
 | OOP design done accidentally / poorly | §8: ADRs, class diagrams, conscious pattern per seam, design-review gate on every package PR |
-| RL temptation in dispatch | Out of scope; heuristic policies only |
+| Dispatch-matching RL scope creep | Out of scope; matching stays heuristic. RL is confined to driver *repositioning* in Phase 6 |
+| RL policy fails to beat the heuristic | Deliverable is the methodology (env design + OPE + honest analysis), not a win; a modest or null result is still a strong artifact |
+| Simulator too toy for RL conclusions | Required limitations section in §7c; OPE reported with CIs and validated against true simulator returns |
+| `sim.des` and `sim.mdp` drift apart | Shared `sim.core` domain model; automated consistency test on aggregate metrics |
+| Small-MLP DQN training too slow on M1 | DQN is stretch-only; tabular/linear core trains in minutes; `sim.mdp` built for high step throughput |
 | Public demo can't host all services | Recorded walkthrough + screenshots fallback, stated up front as acceptable |
 
 ---
@@ -446,3 +548,9 @@ AI-first-firm pitch. Phases 1 + 4a + 2 are the consumer-platform pitch.
   no-dropoff records (decide in Phase 2 based on which is more defensible).
 - HF Space resource envelope: confirm it can host serving + Gradio together, else
   commit to the recorded-walkthrough fallback in Phase 5.
+- Phase 6 RL state abstraction granularity: zone and time-bucket resolution for
+  `sim.mdp` (coarser → tabular-feasible and faster; finer → more realistic but
+  pushes toward the DQN stretch). Resolve at the start of Phase 6 once `sim.core`
+  behavior is observable.
+- Phase 6 ordering: whether to pull RL earlier if an autonomous-driving / mobility
+  employer (e.g. Turing) becomes the primary target.
