@@ -71,6 +71,7 @@ DemandFeatureSchema = DataFrameSchema(
 
 EtaFeatureSchema = DataFrameSchema(
     {
+        "pickup_ts": Column("datetime64[ns]", coerce=True),
         "pu_location_id": Column(int, _zone, coerce=True),
         "do_location_id": Column(int, _zone, coerce=True),
         "hour": Column(int, Check.in_range(0, 23), coerce=True),
@@ -84,6 +85,7 @@ EtaFeatureSchema = DataFrameSchema(
             Check.in_range(0.0, MAX_DURATION_MIN, include_min=False),
             coerce=True,
         ),
+        "split": Column(str, Check.isin(["train", "holdout"])),
     },
     strict=True,
     name="EtaFeatureSchema",

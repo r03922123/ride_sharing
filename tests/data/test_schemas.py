@@ -54,6 +54,7 @@ def _demand_row() -> dict[str, object]:
 
 def _eta_row() -> dict[str, object]:
     return {
+        "pickup_ts": "2023-01-02 08:00:00",
         "pu_location_id": 161,
         "do_location_id": 230,
         "hour": 8,
@@ -61,6 +62,7 @@ def _eta_row() -> dict[str, object]:
         "trip_distance": 2.4,
         "passenger_count": 1,
         "duration_min": 12.0,
+        "split": "train",
     }
 
 
