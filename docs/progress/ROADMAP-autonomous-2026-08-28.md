@@ -1,5 +1,13 @@
 # Autonomous work block — 2026-08-28
 
+**OUTCOME:** Stage 1 (`data` package) **complete** — all 8 milestones, branch
+`stage/01-data` pushed (`928a54d`), 40 tests green, ruff + mypy strict clean.
+Stopped at the clean Stage 1 boundary rather than starting Stage 2 mid-file
+(token-limit caution). Resume point + open questions: see
+`reports/progress/stage-01-SUMMARY.md`.
+
+---
+
 **Mode:** unattended, ~4 hours, permission prompts skipped (user commuting).
 **Branch:** `stage/01-data` (off `main` @ `6a711aa`).
 **Scope:** Plan Stage 1 (`data` package). If it finishes with time/budget left,
