@@ -4,6 +4,10 @@
 # container build. Every step logs a warning and continues; always exits 0.
 set -u
 
+echo "==> Installing OS packages (tmux)"
+sudo apt-get update -y && sudo apt-get install -y --no-install-recommends tmux \
+  || echo "WARN: apt install tmux failed — install later with: sudo apt-get install -y tmux"
+
 echo "==> Installing uv (Python package/env manager)"
 if curl -LsSf https://astral.sh/uv/install.sh | sh; then
   :
