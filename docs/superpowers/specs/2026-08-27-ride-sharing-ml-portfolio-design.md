@@ -242,6 +242,10 @@ it do, how do you use it, what does it depend on.**
 
 ## 7. Evaluation methodology
 
+> Every method named in this section and in §14 has a small hand-checkable
+> numeric worked example in **Appendix A**. Read the appendix entry alongside
+> each phase.
+
 ### 7a — Simulated online experiment (consumer-platform emphasis)
 
 One intervention, implemented as a `DispatchPolicy` (or a pricing rule) in
@@ -579,3 +583,253 @@ AI-first-firm pitch. Phases 1 + 4a + 2 are the consumer-platform pitch. Phase 6
   behavior is observable.
 - Phase 6 ordering: whether to pull RL earlier if an autonomous-driving / mobility
   employer (e.g. Turing) becomes the primary target.
+
+---
+
+## Appendix A — Worked numeric examples
+
+Small, hand-checkable examples for every method in the spec. All numbers are
+**illustrative teaching values**, not target results. Each ties back to the §1
+reference scenario (rainy-Midtown cancellations) where possible.
+
+### A.1 Demand-forecast error and bias (§5, Phase 1)
+
+Zone 161, one rainy evening, hourly pickups:
+
+| Hour | Actual | Forecast | Abs error | Abs % error |
+| --- | --- | --- | --- | --- |
+| 17:00 | 100 | 90 | 10 | 10.0% |
+| 18:00 | 140 | 100 | 40 | 28.6% |
+| 19:00 | 160 | 110 | 50 | 31.3% |
+| 20:00 | 120 | 105 | 15 | 12.5% |
+
+- **MAE** = (10 + 40 + 50 + 15) / 4 = 115 / 4 = **28.75 pickups/hour**
+- **MAPE** = (10.0 + 28.6 + 31.3 + 12.5) / 4 = **20.6%**
+- **Bias** = mean(forecast − actual) = (−10 − 40 − 50 − 15) / 4 = **−28.75**
+
+Every forecast is below actual → the error is not random, it is a systematic
+under-prediction on rain. That one number ("bias = −28.75, all-negative") is the
+evidence behind the scenario's "model underweights rain" finding.
+
+### A.2 Rolling-origin backtest (§7, Phase 1)
+
+6 months of data, expanding window, monthly test folds:
+
+| Fold | Train window | Test month | Test MAE |
+| --- | --- | --- | --- |
+| 1 | Jan–Mar | Apr | 22.0 |
+| 2 | Jan–Apr | May | 19.5 |
+| 3 | Jan–May | Jun | 18.0 |
+
+- **Backtest MAE** = (22.0 + 19.5 + 18.0) / 3 = **19.83 pickups/hour**
+- **Leakage assertion, fold 1:** max(train ts) = Mar 31 23:00 < Apr 1 00:00 =
+  min(test ts) ✓ (checked automatically for every fold).
+
+Old model vs. rain-aware model on the *same* folds:
+
+| | Fold 1 | Fold 2 | Fold 3 | Mean | Rainy-hours-only |
+| --- | --- | --- | --- | --- | --- |
+| Old | 22.0 | 19.5 | 18.0 | 19.83 | 34.0 |
+| New (`precip × hour`) | 20.5 | 19.0 | 17.6 | 19.03 | 22.0 |
+
+Targeted slice improved a lot (34.0 → 22.0); overall improved slightly; no
+regression → ship it.
+
+### A.3 Prediction-interval calibration (§7, Phase 1)
+
+Model emits an 80% prediction interval per hour. Over a 720-hour test month,
+count how many actuals landed inside:
+
+- **Observed coverage** = 612 / 720 = **85.0%**
+- Nominal 80% → **+5.0 pp**: intervals are slightly too wide (conservative).
+  Spec tolerance is ±5 pp → passes, but flag for tightening. Coverage *below*
+  80% would instead mean the model is over-confident.
+
+### A.4 ETA regressor error (§4 `eta`, Phase 2)
+
+10 trips, error (predicted − actual) in minutes:
++2, −1, +3, 0, −4, +1, +2, −2, +5, −1
+
+- **MAE** = (2+1+3+0+4+1+2+2+5+1) / 10 = 21 / 10 = **2.1 min**
+- **RMSE** = √((4+1+9+0+16+1+4+4+25+1) / 10) = √(65/10) = √6.5 = **2.55 min**
+
+RMSE > MAE because the single +5 error is squared. Report both; a large gap
+signals a few big misses rather than uniform error.
+
+### A.5 Imbalanced risk classifier (§4 `risk`, Phase 2, optional)
+
+10,000 ride requests, 500 truly cancel (5% positive rate).
+
+Threshold 0.50:
+
+| | Predicted cancel | Predicted complete |
+| --- | --- | --- |
+| Actually cancel (500) | TP = 300 | FN = 200 |
+| Actually complete (9,500) | FP = 700 | TN = 8,800 |
+
+- **Precision** = 300 / (300 + 700) = **0.30**
+- **Recall** = 300 / (300 + 200) = **0.60**
+- **F1** = 2 · (0.30 · 0.60) / (0.30 + 0.60) = 0.36 / 0.90 = **0.40**
+- **Accuracy** = (300 + 8,800) / 10,000 = **91%** — *misleading*: a "never
+  cancel" model scores 95%. This is why accuracy is the wrong metric here.
+
+Lower threshold to 0.30 → TP = 400, FN = 100, FP = 1,800, TN = 7,700:
+precision **0.18**, recall **0.80**. Recall up, precision down — the tradeoff.
+
+Pick the threshold by cost. If one missed cancellation costs 5× one false alarm,
+minimise 5·FN + 1·FP:
+- threshold 0.50 → 5·200 + 700 = **1,700**
+- threshold 0.30 → 5·100 + 1,800 = **2,300**
+
+→ keep 0.50 under that cost ratio.
+
+**Calibration check:** among requests where the model said "≈0.30", the actual
+cancel rate was 0.24 → over-confident by 6 pp in that bucket → fit Platt /
+isotonic to correct.
+
+### A.6 A/B test — two-sample comparison (§7a, Phase 4a)
+
+Simulated experiment on rider wait time (minutes):
+
+| Arm | n | mean | sd |
+| --- | --- | --- | --- |
+| Control (`StayPut`) | 5,000 | 8.0 | 6.0 |
+| Treatment (`ChaseForecast`) | 5,000 | 6.5 | 5.5 |
+
+- **Difference in means** = 6.5 − 8.0 = **−1.5 min**
+- **SE of difference** = √(6.0²/5000 + 5.5²/5000) = √(0.00720 + 0.00605)
+  = √0.01325 = **0.115 min**
+- **95% CI** = −1.5 ± 1.96 · 0.115 = −1.5 ± 0.226 = **[−1.73, −1.27]**
+- **t** = −1.5 / 0.115 = **−13.0** → p < 0.001
+
+Whole interval below 0 → the policy credibly reduces wait time by ~1.3–1.7 min.
+
+### A.7 Power analysis / required sample size (§7a, Phase 4a)
+
+Detect a minimum effect of **Δ = 0.5 min** at 80% power, 5% significance, equal
+arms. Using n ≈ (z_{α/2} + z_β)² · 2σ² / Δ²:
+
+- (1.96 + 0.84)² = 2.80² = 7.84
+- σ ≈ 6.0 min (pilot run) → σ² = 36
+- n ≈ 7.84 · 2 · 36 / 0.25 = 564.5 / 0.25 = **≈ 2,258 rider-sessions per arm**
+
+At ~1,200 sessions/simulated-day → **≈ 2 simulated days per arm**. Wanting
+Δ = 0.2 min instead scales by (0.5/0.2)² = 6.25 → ≈ 14,100 per arm ≈ 12 days.
+
+### A.8 CUPED variance reduction (§7a, Phase 4a)
+
+Pre-period covariate X = rider's zone-mean wait in the hour before assignment.
+Correlation with the outcome ρ = 0.6.
+
+- Adjusted-outcome variance = Var(Y) · (1 − ρ²) = Var(Y) · (1 − 0.36) =
+  **0.64 · Var(Y)**
+- SE shrinks by √0.64 = **0.8** → **20% narrower CI** on the same data
+- Or: **36% fewer samples** for the same CI width. At ρ = 0.7 → 1 − 0.49 =
+  0.51 → 49% fewer.
+
+Applied to A.6: SE 0.115 → 0.092; 95% CI = −1.5 ± 0.181 = **[−1.68, −1.32]**
+(same point estimate, tighter).
+
+### A.9 Peeking inflation (§7a, Phase 4a)
+
+Run with **no true effect** (treatment = control). Test significance after every
+500 riders up to 5,000 (10 looks), stop early if p < 0.05.
+
+- One honest test: false-positive rate = **5%** (by construction)
+- 10 interim looks, stop-on-significance: empirically **≈ 19%** of runs "find"
+  an effect — ~4× inflation.
+- Fix: one pre-registered analysis, or an alpha-spending boundary (Pocock:
+  require p < 0.0158 at each of 10 looks to keep overall α ≈ 5%).
+
+### A.10 Off-policy evaluation — IPS (§7c, Phase 6)
+
+5 logged episodes under behavior policy *b*. One decision each, two actions
+{A, B}. Return R = completed rides that episode. Target policy π favours A.
+
+| Ep | Action | b(a) | π(a) | R | w = π/b | w·R |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | A | 0.5 | 0.8 | 100 | 1.6 | 160 |
+| 2 | B | 0.5 | 0.2 | 80 | 0.4 | 32 |
+| 3 | A | 0.5 | 0.8 | 120 | 1.6 | 192 |
+| 4 | A | 0.5 | 0.8 | 90 | 1.6 | 144 |
+| 5 | B | 0.5 | 0.2 | 110 | 0.4 | 44 |
+
+- **IPS estimate** V(π) = mean(w·R) = 572 / 5 = **114.4 rides**
+- Behavior policy's own average = 500 / 5 = **100 rides**
+- Plug-in sanity: A-episodes average 103.3, B-episodes 95 → 0.8·103.3 + 0.2·95
+  ≈ **101.7**. IPS (114.4) is far off — that gap **is** the lesson: IPS is
+  unbiased but high-variance in small samples.
+
+### A.11 SNIPS — self-normalized IPS (§7c, Phase 6)
+
+Same numbers, divide by the sum of weights instead of by N:
+
+- Σw = 1.6 + 0.4 + 1.6 + 1.6 + 0.4 = 5.6
+- **SNIPS** = Σ(w·R) / Σw = 572 / 5.6 = **102.1 rides**
+
+Much closer to the plug-in 101.7, far less variance. Tiny bias, big variance win.
+
+### A.12 Doubly-robust (§7c, Phase 6)
+
+Add a learned reward model: Q̂(A) = 105, Q̂(B) = 95.
+
+- **Model term** = Σ_a π(a)·Q̂(a) = 0.8·105 + 0.2·95 = 84 + 19 = **103**
+- **IPS correction on residuals** R − Q̂(a_taken): −5, −15, +15, −15, +15
+  → weighted: 1.6·(−5), 0.4·(−15), 1.6·(15), 1.6·(−15), 0.4·(15)
+  = −8, −6, +24, −24, +6 → sum −8 → mean **−1.6**
+- **DR estimate** = 103 + (−1.6) = **101.4 rides**
+
+Accurate if *either* Q̂ or the weights are good — "two chances to be right."
+
+### A.13 OPE validation against ground truth (§7c, Phase 6)
+
+Because it is a simulator, run π directly: **true V(π) = 101.0 rides**.
+
+| Estimator | Estimate | Relative error |
+| --- | --- | --- |
+| IPS | 114.4 | 13.3% |
+| SNIPS | 102.1 | 1.1% |
+| DR | 101.4 | 0.4% |
+
+Spec's "within 8%" bar → SNIPS and DR pass, raw IPS does not. This is exactly
+why the toolkit implements all three and reports **DR** as primary.
+
+### A.14 Q-learning update (§4 `rl`, Phase 6)
+
+One tabular update. State *s* = "Midtown under-supplied, 17:00", action *a* =
+"move 5 drivers from zone 234". α = 0.1, γ = 0.9.
+
+- Current Q(s, a) = 50
+- Observed reward r = 12 (extra completed rides this step)
+- Best next-state value max_{a'} Q(s', a') = 60
+- **TD target** = r + γ · max Q(s', a') = 12 + 0.9 · 60 = **66**
+- **TD error** δ = 66 − 50 = **16**
+- **New Q(s, a)** = 50 + 0.1 · 16 = **51.6**
+
+Repeated visits push Q(s, a) toward the true long-run value of that move.
+
+### A.15 Drift detection — PSI (§4 `monitoring`, Phase 2)
+
+Population Stability Index on the `precip` feature, training window (p) vs. last
+week (q):
+
+| Bin | p (ref) | q (cur) | q − p | ln(q/p) | (q−p)·ln(q/p) |
+| --- | --- | --- | --- | --- | --- |
+| no rain | 0.80 | 0.60 | −0.20 | −0.288 | 0.0576 |
+| light | 0.15 | 0.25 | +0.10 | +0.511 | 0.0511 |
+| heavy | 0.05 | 0.15 | +0.10 | +1.099 | 0.1099 |
+
+- **PSI** = 0.0576 + 0.0511 + 0.1099 = **0.219**
+- Rule of thumb: < 0.1 stable; 0.1–0.25 moderate shift; > 0.25 significant.
+- 0.219 → **moderate drift** (last week far rainier than training) → triggers a
+  retrain review. Directly the §1 scenario.
+
+### A.16 Latency p99 (§10, Phase 1)
+
+20 sampled `/forecast` response times (ms), sorted:
+12, 13, 13, 14, 15, 15, 16, 17, 18, 19, 20, 21, 22, 24, 27, 30, 35, 42, 55, 98
+
+- **p50** = (19 + 20) / 2 = **19.5 ms**
+- **p99 index** = ⌈0.99 · 20⌉ = ⌈19.8⌉ = 20 → **p99 = 98 ms**
+- Under the 100 ms budget, but the tail (98 vs median 19.5) exposes one slow
+  request → investigate cold-start / GC pause before it regresses.
