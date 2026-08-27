@@ -1,36 +1,35 @@
 #!/usr/bin/env bash
-# Provision the ride-pulse dev environment (runs once, after the container is created).
-set -euo pipefail
+# Best-effort provisioning for the ride-pulse dev container.
+# Deliberately does NOT use `set -e`: a failed optional step must not fail the
+# container build. Every step logs a warning and continues; always exits 0.
+set -u
 
 echo "==> Installing uv (Python package/env manager)"
-curl -LsSf https://astral.sh/uv/install.sh | sh
-if ! grep -q '.local/bin' ~/.bashrc; then
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+if curl -LsSf https://astral.sh/uv/install.sh | sh; then
+  :
+else
+  echo "WARN: uv install failed — install later with: curl -LsSf https://astral.sh/uv/install.sh | sh"
 fi
 export PATH="$HOME/.local/bin:$PATH"
+grep -q '.local/bin' ~/.bashrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 echo "==> Installing Claude Code"
-npm install -g @anthropic-ai/claude-code
+npm install -g @anthropic-ai/claude-code \
+  || echo "WARN: claude-code install failed — install later with: npm i -g @anthropic-ai/claude-code"
 
-echo "==> Syncing Python dependencies (if pyproject.toml exists)"
 if [ -f pyproject.toml ]; then
-  uv sync || echo "uv sync failed (expected before the project is scaffolded) — continuing"
+  echo "==> Syncing Python dependencies"
+  "$HOME/.local/bin/uv" sync || echo "WARN: uv sync failed — run 'uv sync' after checking pyproject.toml"
 fi
 
 cat <<'EOF'
 
-  Dev container ready.
+  Dev container ready (best-effort provisioning complete).
 
   1. Authenticate Claude Code:   claude
-     (prints a URL + device code — approve it from your phone browser;
-      uses your existing subscription, no extra cost)
-
-  2. Work inside tmux so long runs survive disconnects:
-       tmux new -s dev
-       # ... start `claude` or a training run ...
-       # Ctrl-b then d  to detach.  `tmux attach -t dev`  to resume.
-
-  3. Stop the Codespace when idle (Codespaces menu) to conserve free hours —
-     the container state is preserved for up to 30 days.
+  2. Work inside tmux:           tmux new -s dev   (Ctrl-b d to detach)
+  3. Stop the Codespace when idle to conserve free hours.
 
 EOF
+
+exit 0
