@@ -5,7 +5,7 @@ data. Serves forecasting / ETA models behind APIs, exposes them to an LLM
 ops-assistant agent, and includes rigorous evaluation studies (simulated online
 experiment, agent benchmark, off-policy evaluation of an RL repositioning policy).
 
-**Status:** design phase — implementation not started.
+**Status:** implementation in progress — Phase 0.
 
 **Design spec:**
 [`docs/superpowers/specs/2026-08-27-ride-sharing-ml-portfolio-design.md`](docs/superpowers/specs/2026-08-27-ride-sharing-ml-portfolio-design.md)
