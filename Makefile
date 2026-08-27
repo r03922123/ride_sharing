@@ -16,7 +16,7 @@ test:
 	uv run pytest
 
 data:
-	@echo "make data: not implemented yet (lands in Stage 1)"; exit 1
+	uv run ridepulse data build --months 2023-01..2023-02 --root data
 
 sim:
 	@echo "make sim: not implemented yet (lands in Stage 3)"; exit 1
