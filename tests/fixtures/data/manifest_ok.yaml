@@ -1,0 +1,9 @@
+- name: sample_parquet
+  url: https://example.invalid/sample.parquet
+  sha256: null
+  kind: parquet
+
+- name: sample_lookup
+  url: https://example.invalid/lookup.csv
+  sha256: abc123
+  kind: csv

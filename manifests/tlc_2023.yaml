@@ -1,0 +1,23 @@
+# NYC TLC source files for ride-pulse Phase 0-1 (yellow taxi, 2023-01..2023-02).
+# sha256 values were captured from the first verified download on 2026-08-28:
+#   ridepulse data download --manifest manifests/tlc_2023.yaml
+
+- name: yellow_tripdata_2023-01
+  url: https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-01.parquet
+  sha256: 32df6f67578fa86c484a6b5ef23a5281992ff085521082340b0f9e5889e9a572
+  kind: parquet
+
+- name: yellow_tripdata_2023-02
+  url: https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-02.parquet
+  sha256: 4809e6aaac64f05a62d16a25d55713be1537ad64fc261e895eaf2d2120fe750a
+  kind: parquet
+
+- name: taxi_zone_lookup
+  url: https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv
+  sha256: 1a99e105092230f8620f301edcca7f80d3080642ff404d28ed957d3fa222c8ed
+  kind: csv
+
+- name: taxi_zones_shapefile
+  url: https://d37ci6vzurychx.cloudfront.net/misc/taxi_zones.zip
+  sha256: f6d711917bb4340f8f644d5366c51665489eb2d426dd1a4a55677721ae5adf17
+  kind: zip
