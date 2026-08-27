@@ -39,7 +39,7 @@ CleanedTripSchema = DataFrameSchema(
             float, Check.in_range(0.0, MAX_TRIP_MILES, include_min=False), coerce=True
         ),
         "passenger_count": Column(
-            int, Check.ge(0), nullable=True, coerce=True
+            "Int64", Check.ge(0), nullable=True, coerce=True
         ),
         "duration_min": Column(
             float,
@@ -78,7 +78,7 @@ EtaFeatureSchema = DataFrameSchema(
         "trip_distance": Column(
             float, Check.in_range(0.0, MAX_TRIP_MILES, include_min=False), coerce=True
         ),
-        "passenger_count": Column(int, Check.ge(0), nullable=True, coerce=True),
+        "passenger_count": Column("Int64", Check.ge(0), nullable=True, coerce=True),
         "duration_min": Column(
             float,
             Check.in_range(0.0, MAX_DURATION_MIN, include_min=False),
