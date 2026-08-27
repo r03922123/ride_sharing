@@ -1,7 +1,8 @@
 # `ridepulse.sim` — class diagram
 
-Stage 2 scope: `sim.core`. `sim.des` classes (dashed) are added in Stage 3;
-`sim.mdp` is an interface stub until Phase 6. See ADR-0002 for the rationale.
+`sim.core` (Stage 2) + `sim.des` (Stage 3). `sim.mdp` is an interface stub until
+Phase 6. See ADR-0002 (the split) and ADR-0003 (dispatch Strategy, event
+Observer).
 
 ```mermaid
 classDiagram
@@ -82,19 +83,55 @@ classDiagram
     Rider --> RiderState
     Driver --> DriverState
 
+    class SimConfig {
+      +city: CityModel
+      +policy: DispatchPolicy
+      +start; hours; patience_min; speed_kmh; seed
+      +observers: list~EventObserver~
+    }
     class Simulation {
-      <<Stage 3>>
       +run() EventLog
     }
     class DispatchPolicy {
-      <<Stage 3, abstract>>
+      <<abstract>>
       +assign(pending, idle, city, now) list~Assignment~
     }
-    class EventObserver {
-      <<Stage 3, abstract>>
+    class NearestDriverPolicy {
+      +radius_km: float
     }
-    Simulation ..> CityModel
+    class EventObserver {
+      <<abstract>>
+      +on_event(event)
+    }
+    class EventLogWriter
+    class MetricsCollector {
+      +result() SimMetrics
+    }
+    class EventLog {
+      +append(event)
+      +to_frame() DataFrame
+      +to_parquet(path)
+    }
+    class Event {
+      <<abstract>>
+      +ts: Timestamp
+      +kind: str
+    }
+    class MdpSimulator {
+      <<Protocol, Phase 6 stub>>
+      +reset(seed) State
+      +step(state, action) StepResult
+    }
+
+    Simulation ..> SimConfig
+    Simulation --> EventLog
     Simulation ..> DispatchPolicy
     Simulation ..> EventObserver
+    DispatchPolicy <|-- NearestDriverPolicy
     DispatchPolicy ..> Assignment
+    EventObserver <|-- EventLogWriter
+    EventObserver <|-- MetricsCollector
+    EventLogWriter --> EventLog
+    EventLog "1" --> "*" Event
+    MdpSimulator ..> CityModel : (Phase 6)
 ```
