@@ -27,6 +27,7 @@ dev = [
     "mypy",
     "pre-commit",
     "types-PyYAML",
+    "pandas-stubs",
 ]
 geo = [
     "geopandas",
