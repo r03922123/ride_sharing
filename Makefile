@@ -19,7 +19,7 @@ data:
 	uv run ridepulse data build --months 2023-01..2023-02 --root data
 
 sim:
-	@echo "make sim: not implemented yet (lands in Stage 3)"; exit 1
+	uv run ridepulse sim run --config configs/sim/baseline.yaml --out reports/sim/baseline
 
 train:
 	@echo "make train: not implemented yet (lands in Stage 4)"; exit 1

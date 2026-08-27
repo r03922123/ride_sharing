@@ -1,0 +1,10 @@
+{
+  "requests": 102111,
+  "rides_completed": 98110,
+  "cancellations": 3056,
+  "cancel_rate": 0.0299,
+  "mean_wait_min": 2.72,
+  "median_wait_min": 0.994,
+  "p90_wait_min": 7.433,
+  "driver_idle_pct": 0.609
+}

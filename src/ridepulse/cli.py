@@ -66,6 +66,14 @@ _PROFILE_OUT = typer.Option(
 )
 
 
+_SIM_CONFIG = typer.Option(
+    Path("configs/sim/baseline.yaml"), help="Scenario YAML"
+)
+_SIM_OUT = typer.Option(
+    Path("reports/sim/baseline"), help="Output directory for event log + metrics"
+)
+
+
 @sim_app.command()
 def calibrate(root: Path = _ROOT, out: Path = _PROFILE_OUT) -> None:
     """Calibrate the (zone x hour-of-week) demand profile from cleaned_trips."""
@@ -74,6 +82,17 @@ def calibrate(root: Path = _ROOT, out: Path = _PROFILE_OUT) -> None:
     prof = DemandProfile.calibrate(ParquetRepository(root).path("cleaned_trips"))
     prof.save(out)
     typer.echo(f"demand profile -> {out}")
+
+
+@sim_app.command()
+def run(config: Path = _SIM_CONFIG, out: Path = _SIM_OUT) -> None:
+    """Run a discrete-event scenario; write event_log.parquet + metrics.json."""
+    from ridepulse.sim.des.runner import run_scenario
+
+    metrics = run_scenario(config, out)
+    typer.echo(f"sim run -> {out}")
+    for k, v in metrics.items():
+        typer.echo(f"  {k}: {v}")
 
 
 @data_app.command()

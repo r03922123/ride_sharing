@@ -14,6 +14,7 @@ dependencies = [
     "pandera>=0.20",
     "pyyaml>=6",
     "holidays>=0.57",
+    "simpy>=4.1",
 ]
 
 [project.scripts]
