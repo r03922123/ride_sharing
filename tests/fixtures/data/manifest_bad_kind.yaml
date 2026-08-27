@@ -1,0 +1,4 @@
+- name: sample
+  url: https://example.invalid/sample.txt
+  sha256: null
+  kind: text

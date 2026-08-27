@@ -7,6 +7,13 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
     "typer>=0.12",
     "pydantic>=2",
+    "duckdb>=1.1",
+    "pandas>=2.2",
+    "pyarrow>=17",
+    "numpy>=1.26",
+    "pandera>=0.20",
+    "pyyaml>=6",
+    "holidays>=0.57",
 ]
 
 [project.scripts]
@@ -19,6 +26,8 @@ dev = [
     "ruff",
     "mypy",
     "pre-commit",
+    "types-PyYAML",
+    "pandas-stubs",
 ]
 geo = [
     "geopandas",
@@ -38,6 +47,8 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "N"]
+# ChecksumMismatch / LeakageError names are pinned by the implementation plan.
+ignore = ["N818"]
 
 [tool.mypy]
 python_version = "3.11"

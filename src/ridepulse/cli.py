@@ -1,4 +1,12 @@
+from __future__ import annotations
+
+from pathlib import Path
+
 import typer
+
+from ridepulse.data import pipeline
+from ridepulse.data.repository import ParquetRepository
+from ridepulse.data.schemas import DemandFeatureSchema, EtaFeatureSchema
 
 app = typer.Typer(help="ride-pulse: ride-sharing demand intelligence CLI")
 
@@ -11,6 +19,55 @@ app.add_typer(data_app, name="data")
 app.add_typer(sim_app, name="sim")
 app.add_typer(forecast_app, name="forecast")
 app.add_typer(serve_app, name="serve")
+
+_MONTHS = typer.Option("2023-01..2023-02", help="Month or inclusive range YYYY-MM..YYYY-MM")
+_MANIFEST = typer.Option(pipeline.DEFAULT_MANIFEST, help="Path to the download manifest")
+_ROOT = typer.Option(Path("data"), help="Data root (raw/ and processed/ live here)")
+_RAW_DIR = typer.Option(Path("data/raw"), help="Directory for downloaded source files")
+
+
+@data_app.command()
+def download(manifest: Path = _MANIFEST, raw_dir: Path = _RAW_DIR) -> None:
+    """Fetch every manifest entry and print its verified SHA-256."""
+    from ridepulse.data.download import computed_checksums
+
+    paths = pipeline.download_sources(manifest, raw_dir)
+    for name, digest in computed_checksums(paths).items():
+        typer.echo(f"{name}: {digest}")
+
+
+@data_app.command()
+def clean(months: str = _MONTHS, raw_dir: Path = _RAW_DIR,
+          root: Path = _ROOT) -> None:
+    """Clean the given months into the cleaned_trips table."""
+    out = pipeline.clean_months(pipeline.parse_months(months), raw_dir,
+                                ParquetRepository(root))
+    typer.echo(f"cleaned_trips -> {out}")
+
+
+@data_app.command()
+def features(root: Path = _ROOT) -> None:
+    """Build demand + ETA feature tables from cleaned_trips."""
+    demand, eta = pipeline.build_features(ParquetRepository(root))
+    typer.echo(f"demand_features -> {demand}")
+    typer.echo(f"eta_features -> {eta}")
+
+
+@data_app.command()
+def build(months: str = _MONTHS, manifest: Path = _MANIFEST,
+          root: Path = _ROOT) -> None:
+    """Run the full pipeline: download -> clean -> features."""
+    pipeline.build_all(months, manifest, root)
+    typer.echo("data build complete")
+
+
+@data_app.command()
+def validate(root: Path = _ROOT) -> None:
+    """Re-validate the processed feature tables against their schemas."""
+    repo = ParquetRepository(root)
+    DemandFeatureSchema.validate(repo.read("demand_features"), lazy=True)
+    EtaFeatureSchema.validate(repo.read("eta_features"), lazy=True)
+    typer.echo("processed tables are schema-valid")
 
 
 if __name__ == "__main__":
