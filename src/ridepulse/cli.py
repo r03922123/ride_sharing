@@ -61,6 +61,21 @@ def build(months: str = _MONTHS, manifest: Path = _MANIFEST,
     typer.echo("data build complete")
 
 
+_PROFILE_OUT = typer.Option(
+    Path("configs/sim/demand_profile.parquet"), help="Demand-profile artifact path"
+)
+
+
+@sim_app.command()
+def calibrate(root: Path = _ROOT, out: Path = _PROFILE_OUT) -> None:
+    """Calibrate the (zone x hour-of-week) demand profile from cleaned_trips."""
+    from ridepulse.sim.core.demand import DemandProfile
+
+    prof = DemandProfile.calibrate(ParquetRepository(root).path("cleaned_trips"))
+    prof.save(out)
+    typer.echo(f"demand profile -> {out}")
+
+
 @data_app.command()
 def validate(root: Path = _ROOT) -> None:
     """Re-validate the processed feature tables against their schemas."""
