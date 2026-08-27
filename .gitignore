@@ -27,6 +27,7 @@ mlruns/
 # scripts/build_zone_geometry.py)
 !src/ridepulse/sim/core/data/
 !src/ridepulse/sim/core/data/*.parquet
+!src/ridepulse/sim/core/data/*.csv
 
 # Node (Claude Code is installed globally, not vendored)
 node_modules/
